@@ -114,7 +114,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <div class="app">
   <header>
     <span class="badge52">52</span>
-    <h1>Mon bus<span class="sub" id="hdrsub">Maison ⇄ Bureau</span></h1>
+    <h1>Mon bus<span class="sub" id="hdrsub">Maison ⇄ Bureau · <span id="ver"></span></span></h1>
   </header>
 
   <main>
@@ -135,6 +135,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <div class="geo" id="geo"></div>
       <div class="card"><div class="deps" id="deps"><div class="empty">Chargement…</div></div></div>
       <div class="status" id="status"></div>
+      <pre id="diag" style="display:none;white-space:pre-wrap;font-size:11px;color:var(--muted);background:var(--card);padding:10px;border-radius:12px;margin-top:10px"></pre>
     </section>
 
     <section class="view" id="vMap">
@@ -156,6 +157,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 /* =========================================================================
    Bus 52 — configuration
    ========================================================================= */
+const VERSION = "v1.7";
 const CONFIG = {
   // Relais Cloudflare (voir worker/). Une fois déployé, mets son adresse ici
   // pour que l'appli marche directement sans rien régler sur le téléphone.
@@ -460,7 +462,7 @@ async function refresh() {
     } else {
       if (!S.net || S.net.lineId === "DEMO") S.net = await resolveNetwork();
       if (!S.net.home) throw new Error("Arrêt « La Fontaine - Radio France » introuvable sur la ligne");
-      try { journeysCache = await fetchJourneys(); learnQuays(journeysCache); } catch (e) { journeysCache = []; }
+      try { journeysCache = await fetchJourneys(); learnQuays(journeysCache); S.etErr = null; } catch (e) { journeysCache = []; S.etErr = e.message; }
       S.deps = await fetchDepartures(journeysCache);
     }
     S.vehicles = estimateVehicles(journeysCache);
@@ -468,14 +470,29 @@ async function refresh() {
   } catch (e) {
     S.error = /fetch|network|load failed/i.test(e.message || "") ? "Pas de connexion internet" : (e.message || String(e));
   }
-  render(); renderMap();
+  render(); renderMap(); diag();
 }
 
 /* =========================================================================
    Affichage
    ========================================================================= */
 function officeCfg() { return CONFIG.offices.find(o => o.key === S.office) || CONFIG.offices[0]; }
+function diag() {
+  if (!/diag/.test(location.hash) || !S.net) return;
+  const H = S.net.home?.quays || [], O = S.net.offices[S.office]?.quays || [];
+  const J = journeysCache, hasH = J.filter(j => j.calls.some(c => H.includes(c.q))), hasO = J.filter(j => j.calls.some(c => O.includes(c.q)));
+  const both = J.filter(j => j.calls.some(c => H.includes(c.q)) && j.calls.some(c => O.includes(c.q)));
+  const ex = J.slice(0, 3).map(j => `• ${j.id} → ${j.dest} : ${j.calls.length} arrêts [${j.calls.map(c => c.q).join(",")}]`).join("\n");
+  $("diag").style.display = "block";
+  $("diag").textContent = `${VERSION} · ligne ${S.net.lineId}
+courses (estimated-timetable) : ${J.length}${S.etErr ? " ERREUR " + S.etErr : ""}
+avec maison : ${hasH.length} · avec bureau : ${hasO.length} · les deux : ${both.length}
+quais maison : ${H.join(",")} · quais bureau : ${O.join(",")}
+départs : ${S.deps.map(d => (d.id || "?") + (d.arr ? " ✓" : " ✗")).join(" | ")}
+${ex}`;
+}
 function render() {
+  $("ver").textContent = VERSION;
   const off = officeCfg();
   $("dH2O").classList.toggle("on", S.dir === "H2O");
   $("dO2H").classList.toggle("on", S.dir === "O2H");

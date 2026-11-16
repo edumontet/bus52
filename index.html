@@ -210,6 +210,14 @@ function countdown(ms) {
 }
 
 /* ---------- état ---------- */
+// Lien privé de configuration : …/bus52/#cle=XXXX (le # n'est jamais envoyé au serveur).
+// On garde le lien tel quel pour que « Sur l'écran d'accueil » (iPhone) emporte la clé.
+try {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("cle")) store.set("key", h.get("cle").trim());
+  if (h.get("relais")) store.set("proxy", h.get("relais").trim());
+} catch {}
+
 const S = {
   dir: "H2O",                                   // H2O = maison→bureau, O2H = bureau→maison
   office: store.get("office", "vhpv"),
@@ -512,8 +520,8 @@ let map, busLayer, baseLayer;
 function initMap() {
   if (map || !window.L) return;
   map = L.map("map", { zoomControl: true, attributionControl: true });
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © CARTO'
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
   baseLayer = L.layerGroup().addTo(map);
   busLayer = L.layerGroup().addTo(map);

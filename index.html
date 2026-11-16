@@ -157,7 +157,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 /* =========================================================================
    Bus 52 — configuration
    ========================================================================= */
-const VERSION = "v1.7";
+const VERSION = "v1.8";
 const CONFIG = {
   // Relais Cloudflare (voir worker/). Une fois déployé, mets son adresse ici
   // pour que l'appli marche directement sans rien régler sur le téléphone.
@@ -300,6 +300,7 @@ async function fetchJourneys() {
   del.forEach(d => (d.EstimatedJourneyVersionFrame || []).forEach(f => (f.EstimatedVehicleJourney || []).forEach(ej => {
     if (v(ej.LineRef) && v(ej.LineRef) !== lineRef()) return;
     const calls = (ej.EstimatedCalls?.EstimatedCall || []).map(c => ({ q: quayNum(v(c.StopPointRef)), t: tOf(c) })).filter(c => c.q && !isNaN(c.t));
+    calls.sort((a, b) => a.t - b.t);
     if (calls.length) out.push({ id: v(ej.DatedVehicleJourneyRef) || v(ej.FramedVehicleJourneyRef?.DatedVehicleJourneyRef), dest: v(ej.DestinationName), calls });
   })));
   return out;
@@ -334,6 +335,27 @@ function destDir(dest, fromHome) {
   return fromHome ? "H2O" : "O2H";
 }
 
+/* Passages annoncés à un ensemble de quais (stop-monitoring) */
+async function visitsAt(quays) {
+  const res = await Promise.all(quays.map(q =>
+    prim("stop-monitoring", { MonitoringRef: quayRef(q), LineRef: lineRef() }).then(j => ({ q, j })).catch(() => ({ q, j: null }))));
+  const out = [];
+  res.forEach(({ q, j }) => (j?.Siri?.ServiceDelivery?.StopMonitoringDelivery || []).forEach(d => (d.MonitoredStopVisit || []).forEach(vis => {
+    const mvj = vis.MonitoredVehicleJourney || {}, call = mvj.MonitoredCall || {};
+    const t = tOf(call); if (isNaN(t)) return;
+    out.push({ q, t, id: v(mvj.FramedVehicleJourneyRef?.DatedVehicleJourneyRef), dest: v(call.DestinationDisplay) || v(mvj.DestinationName) || "", rt: !!v(call.ExpectedDepartureTime) || !!v(call.ExpectedArrivalTime), atStop: !!call.VehicleAtStop, lineRef: v(mvj.LineRef) });
+  })));
+  return { out, ok: res.some(r => r.j) };
+}
+/* Quais où l'on peut descendre : l'arrêt exact, plus (côté maison) les arrêts proches,
+   car sur le 52 le bus du retour ne s'arrête pas toujours au même arrêt qu'à l'aller. */
+function destCandidates(dest, nearHome) {
+  const exact = dest.quays.map(q => ({ q, d: 0 }));
+  if (!nearHome) return exact;
+  const near = S.net.stops.filter(s => !dest.quays.includes(s.num)).map(s => ({ q: s.num, d: distM([s.lat, s.lon], dest.pos) }))
+    .filter(x => x.d < 650).sort((a, b) => a.d - b.d).slice(0, 6);
+  return exact.concat(near);
+}
 async function fetchDepartures(journeys) {
   const origin = S.dir === "H2O" ? S.net.home : S.net.offices[S.office];
   const dest = S.dir === "H2O" ? S.net.offices[S.office] : S.net.home;
@@ -373,6 +395,19 @@ async function fetchDepartures(journeys) {
     return b ? b.t - a.t : null;
   }).filter(Boolean).sort((a, b) => a - b);
   const typical = trips.length ? trips[Math.floor(trips.length / 2)] : null;
+  // heure d'arrivée : on retrouve le même bus dans les passages annoncés à l'arrêt d'arrivée
+  try {
+    if (dest) {
+      const cands = destCandidates(dest, S.dir === "O2H");
+      const { out } = await visitsAt(cands.map(c => c.q));
+      const distOf = q => cands.find(c => c.q === q)?.d ?? 9e9;
+      deps.forEach(d => {
+        if (!d.id) return;
+        const m = out.filter(x => x.id === d.id && x.t > d.t + 30000).sort((a, b) => distOf(a.q) - distOf(b.q) || a.t - b.t)[0];
+        if (m) { d.arr = m.t; d.arrEst = false; d.arrStop = dest.quays.includes(m.q) ? null : stopByNum(m.q)?.name; }
+      });
+    }
+  } catch {}
   deps.forEach(d => { if (!d.arr && typical) { d.arr = d.t + typical; d.arrEst = true; } });
   const now = Date.now();
   const seen = new Set();
@@ -488,7 +523,7 @@ function diag() {
 courses (estimated-timetable) : ${J.length}${S.etErr ? " ERREUR " + S.etErr : ""}
 avec maison : ${hasH.length} · avec bureau : ${hasO.length} · les deux : ${both.length}
 quais maison : ${H.join(",")} · quais bureau : ${O.join(",")}
-départs : ${S.deps.map(d => (d.id || "?") + (d.arr ? " ✓" : " ✗")).join(" | ")}
+départs : ${S.deps.map(d => (d.id || "?").slice(-22) + (d.arr ? (d.arrEst ? " ≈" : " ✓") + (d.arrStop || "") : " ✗")).join(" | ")}
 ${ex}`;
 }
 function render() {
@@ -521,7 +556,7 @@ function tick() {
     return `<div class="dep ${i === 0 ? "first" : ""}">
       <div><div class="rank">${ranks[i]}</div><div class="cd ${soon ? "soon" : ""}">${cd}</div></div>
       <div class="meta">passe à<b>${hms(new Date(d.t))}</b></div>
-      ${d.arr ? `<div class="arr">🏁 Arrivée ${toName} <b>${d.arrEst ? "≈ " : ""}${hms(new Date(d.arr)).slice(0, 5)}</b> <span>(${Math.round((d.arr - d.t) / 60000)} min de trajet)</span></div>` : ""}
+      ${d.arr ? `<div class="arr">🏁 Arrivée ${d.arrStop ? d.arrStop : toName} <b>${d.arrEst ? "≈ " : ""}${hms(new Date(d.arr)).slice(0, 5)}</b> <span>(${Math.round((d.arr - d.t) / 60000)} min de trajet)</span></div>` : ""}
       <div class="dest">→ ${d.dest || "?"} <span class="pill ${d.rt ? "rt" : ""}">${d.rt ? "temps réel" : "théorique"}</span></div>
     </div>`;
   }).join("");

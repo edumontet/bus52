@@ -11,7 +11,7 @@ Petite web-app (PWA) pour la ligne de bus **52** à Paris :
   Île-de-France Mobilités ne publie pas le GPS des bus : leur position est **estimée** à partir des heures
   de passage en temps réel (le bus est placé entre l'arrêt précédent et le prochain arrêt).
 
-Sans réglage, l'appli tourne en **mode démo** (bus simulés).
+Si `CONFIG.proxyUrl` est vide, l'appli tourne en **mode démo** (bus simulés).
 
 ## Données
 
@@ -33,11 +33,11 @@ npx wrangler secret put PRIM_API_KEY   # coller la clé PRIM
 npx wrangler deploy                    # affiche l'adresse https://bus52.<compte>.workers.dev
 ```
 Mettre ensuite cette adresse dans `CONFIG.proxyUrl` en haut du script de `index.html`
-(ou la coller dans ⚙️ Réglages sur le téléphone).
+(déjà fait : `https://bus52.edumontet.workers.dev`). Le relais n'accepte que l'appli (`https://edumontet.github.io`).
 
 ### 3. Hébergement GitHub Pages
 Settings → Pages → *Deploy from a branch* → `main` / `(root)`.
 
 ### 4. Sur le téléphone
-Ouvrir l'adresse GitHub Pages dans Safari → Partager → **Sur l'écran d'accueil**.
+Ouvrir https://edumontet.github.io/bus52/ dans Safari → Partager → **Sur l'écran d'accueil**.
 Autoriser la localisation pour le choix automatique du sens.

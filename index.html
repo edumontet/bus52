@@ -111,9 +111,6 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   <header>
     <span class="badge52">52</span>
     <h1>Mon bus<span class="sub" id="hdrsub">Maison ⇄ Bureau</span></h1>
-    <button class="iconbtn" id="btnSettings" aria-label="Réglages">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-    </button>
   </header>
 
   <main>
@@ -149,16 +146,6 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   </div></nav>
 </div>
 
-<dialog id="dlg"><form method="dialog" class="dlg">
-  <h2>Réglages</h2>
-  <p>Les horaires en temps réel viennent d'Île-de-France Mobilités (PRIM). Il faut soit l'adresse du relais (recommandé), soit une clé API.</p>
-  <label for="inProxy">Adresse du relais</label>
-  <input id="inProxy" placeholder="https://bus52.xxxx.workers.dev" autocomplete="off" inputmode="url">
-  <label for="inKey">Clé API PRIM (facultatif)</label>
-  <input id="inKey" placeholder="à coller ici si pas de relais" autocomplete="off">
-  <p>Laisse les deux vides pour voir le mode démo (bus simulés).</p>
-  <div class="row"><button class="btn" value="cancel">Annuler</button><button class="btn pri" value="ok" id="btnSave">Enregistrer</button></div>
-</form></dialog>
 
 <script src="vendor/leaflet.js"></script>
 <script>
@@ -210,19 +197,11 @@ function countdown(ms) {
 }
 
 /* ---------- état ---------- */
-// Lien privé de configuration : …/bus52/#cle=XXXX (le # n'est jamais envoyé au serveur).
-// On garde le lien tel quel pour que « Sur l'écran d'accueil » (iPhone) emporte la clé.
-try {
-  const h = new URLSearchParams(location.hash.slice(1));
-  if (h.get("cle")) store.set("key", h.get("cle").trim());
-  if (h.get("relais")) store.set("proxy", h.get("relais").trim());
-} catch {}
-
 const S = {
   dir: "H2O",                                   // H2O = maison→bureau, O2H = bureau→maison
   office: store.get("office", "vhpv"),
-  proxy: store.get("proxy", "") || CONFIG.proxyUrl,
-  key: store.get("key", ""),
+  proxy: CONFIG.proxyUrl,
+  key: "",
   demo: false,
   net: null,                                    // réseau résolu (ligne, arrêts, tracé)
   deps: [],                                     // prochains départs pour la direction affichée
@@ -471,7 +450,7 @@ async function refresh() {
     S.vehicles = estimateVehicles(journeysCache);
     S.lastUpdate = new Date(); S.error = null;
   } catch (e) {
-    S.error = e.message || String(e);
+    S.error = /fetch|network|load failed/i.test(e.message || "") ? "Pas de connexion internet" : (e.message || String(e));
   }
   render(); renderMap();
 }
@@ -491,10 +470,9 @@ function render() {
   { const h = new Date().getHours(); $("hello").textContent = (h < 5 || h >= 18 ? "Bonsoir" : "Bonjour") + " ! Bonne route 🚌"; }
 
   let b = "";
-  if (S.demo) b = `<div class="banner"><b>Mode démo</b> : les bus sont simulés. Pour les vrais horaires, <button id="openSet">règle le relais ou la clé</button>.</div>`;
-  else if (S.error) b = `<div class="banner">⚠️ ${S.error}. Nouvel essai dans 30 s. <button id="openSet">Réglages</button></div>`;
+  if (S.demo) b = `<div class="banner"><b>Mode démo</b> : les bus sont simulés.</div>`;
+  else if (S.error) b = `<div class="banner">⚠️ ${S.error}. Nouvel essai dans 30 s.</div>`;
   $("banner").innerHTML = b;
-  const os = $("openSet"); if (os) os.onclick = openSettings;
 
   tick();
   $("status").textContent = S.lastUpdate ? `Mis à jour à ${hms(S.lastUpdate)} · actualisation toutes les 30 s` : "";
@@ -601,16 +579,6 @@ function setView(vw) {
 }
 $("tTimes").onclick = () => setView("times");
 $("tMap").onclick = () => setView("map");
-function openSettings() { $("inProxy").value = S.proxy; $("inKey").value = S.key; $("dlg").showModal(); }
-$("btnSettings").onclick = openSettings;
-$("dlg").addEventListener("close", () => {
-  if ($("dlg").returnValue !== "ok") return;
-  S.proxy = $("inProxy").value.trim(); S.key = $("inKey").value.trim();
-  store.set("proxy", S.proxy); store.set("key", S.key);
-  if (!S.proxy && CONFIG.proxyUrl) S.proxy = CONFIG.proxyUrl;
-  S.demo = !S.proxy && !S.key; S.net = null; S.deps = []; baseDrawnFor = null; S.error = null;
-  render(); refresh();
-});
 
 /* ---------- démarrage ---------- */
 render();

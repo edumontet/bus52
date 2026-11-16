@@ -157,7 +157,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 /* =========================================================================
    Bus 52 — configuration
    ========================================================================= */
-const VERSION = "v1.9";
+const VERSION = "v2.0";
 const CONFIG = {
   // Relais Cloudflare (voir worker/). Une fois déployé, mets son adresse ici
   // pour que l'appli marche directement sans rien régler sur le téléphone.
@@ -402,7 +402,7 @@ async function fetchDepartures(journeys) {
       const cands = destCandidates(dest, S.dir === "O2H");
       const { out } = await visitsAt(cands.map(c => c.q));
       const distOf = q => cands.find(c => c.q === q)?.d ?? 9e9;
-      S.dbgOut = out.length + " passages : " + out.slice(0, 8).map(x => x.q + " " + (x.id || "?").slice(-22) + " " + hms(new Date(x.t)).slice(0, 5)).join(" | ");
+      S.dbgOut = out.length + " passages : " + out.slice(0, 20).map(x => x.q + " " + (x.id || "?").slice(-22) + " " + hms(new Date(x.t)).slice(0, 5)).join(" | ");
       deps.forEach(d => {
         if (!d.id) return;
         const m = out.filter(x => x.id === d.id && x.t > d.t + 30000).sort((a, b) => distOf(a.q) - distOf(b.q) || a.t - b.t)[0];
@@ -410,7 +410,18 @@ async function fetchDepartures(journeys) {
       });
     }
   } catch (e) { S.dbgOut = "ERREUR " + e.message; }
-  deps.forEach(d => { if (!d.arr && typical) { d.arr = d.t + typical; d.arrEst = true; } });
+  // temps de trajet appris (bus vraiment retrouvés aux deux arrêts), sinon valeur habituelle par défaut
+  const tripKey = S.dir + "-" + S.office;
+  const learned = store.get("trips", {});
+  deps.forEach(d => { if (d.arr && !d.arrEst && !d.arrStop) {
+    const arr = (learned[tripKey] || []).filter(x => x.id !== d.id); arr.push({ id: d.id, m: d.arr - d.t });
+    learned[tripKey] = arr.slice(-15);
+  } });
+  store.set("trips", learned);
+  const L = (learned[tripKey] || []).map(x => x.m).sort((a, b) => a - b);
+  const DEFAULT_MIN = { "H2O-vhpv": 11, "H2O-cdg": 13, "O2H-vhpv": 12, "O2H-cdg": 14 };
+  const usual = L.length ? L[Math.floor(L.length / 2)] : typical || DEFAULT_MIN[tripKey] * 60000;
+  deps.forEach(d => { if (!d.arr && usual) { d.arr = d.t + usual; d.arrEst = true; } });
   const now = Date.now();
   const seen = new Set();
   return deps.filter(d => d.dir === S.dir && d.t > now - 30000)

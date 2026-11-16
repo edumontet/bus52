@@ -1,0 +1,7 @@
+name = "bus52"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Décommente et adapte pour n'autoriser que l'appli :
+# ALLOWED_ORIGIN = "https://edumontet.github.io"

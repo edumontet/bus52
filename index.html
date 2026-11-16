@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bus 52</title>
+<meta name="description" content="Prochains bus 52 entre la maison et le bureau, en temps réel.">
+<meta name="theme-color" content="#0b5d4b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bus 52">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<style>
+:root{
+  --bg:#f4f6f5; --card:#ffffff; --ink:#14201c; --muted:#5d6b66; --line:#e2e8e5;
+  --brand:#0b5d4b; --brand-ink:#ffffff; --accent:#16a37f; --warn:#c2410c; --soon:#b91c1c;
+  --chip:#e8f2ee; --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 16px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1412; --card:#17201d; --ink:#e8efec; --muted:#9aa8a3; --line:#26322e;
+    --brand:#13836a; --chip:#1f2c28; --accent:#34d3a6; --warn:#fb923c; --soon:#f87171;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1412; --card:#17201d; --ink:#e8efec; --muted:#9aa8a3; --line:#26322e;
+  --brand:#13836a; --chip:#1f2c28; --accent:#34d3a6; --warn:#fb923c; --soon:#f87171;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+header{background:var(--brand);color:var(--brand-ink);padding:calc(14px + env(safe-area-inset-top)) 16px 14px;display:flex;align-items:center;gap:12px}
+.badge52{background:#fff;color:var(--brand);font-weight:800;border-radius:10px;padding:4px 10px;font-size:22px;letter-spacing:-.5px}
+header h1{font-size:17px;margin:0;font-weight:600;flex:1}
+header .sub{font-size:12px;opacity:.85;font-weight:400;display:block}
+.iconbtn{background:rgba(255,255,255,.15);border:0;border-radius:10px;width:38px;height:38px;display:grid;place-items:center;cursor:pointer;color:#fff}
+main{flex:1;padding:14px 16px}
+.view{display:none}.view.on{display:block}
+.hero{position:relative;border-radius:16px;overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow);aspect-ratio:364/115;background:#8fb3d9}
+.hero img{width:100%;height:100%;object-fit:cover;object-position:center 22%;display:block}
+.hero span{position:absolute;right:10px;bottom:10px;background:rgba(255,255,255,.92);color:#0b5d4b;font-weight:750;border-radius:999px;padding:5px 12px;font-size:14px}
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px}
+.dirswitch{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--chip);padding:5px;border-radius:14px}
+.dirswitch button{border:0;background:transparent;padding:10px 6px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;color:var(--muted)}
+.dirswitch button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.route{display:flex;align-items:center;gap:10px;margin:12px 2px 6px}
+.route .stop{flex:1;min-width:0}
+.route .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.route .nm{font-weight:650;font-size:14px;line-height:1.25}
+.route .arrow{color:var(--muted);font-size:20px}
+.offices{display:flex;gap:6px;margin:6px 0 10px}
+.offices button{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 8px;font-size:12.5px;cursor:pointer}
+.offices button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.geo{font-size:13px;color:var(--muted);margin:2px 2px 10px;display:flex;gap:6px;align-items:center;min-height:18px}
+.deps{display:flex;flex-direction:column;gap:10px}
+.dep{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center}
+.dep.first .cd{font-size:44px}
+.cd{font-variant-numeric:tabular-nums;font-weight:750;font-size:30px;letter-spacing:-1px;line-height:1.05}
+.cd small{font-size:.5em;font-weight:600;letter-spacing:0;color:var(--muted);margin:0 3px 0 1px}
+.cd.soon{color:var(--soon)}
+.rank{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.meta{text-align:right;font-size:13px;color:var(--muted)}
+.meta b{display:block;color:var(--ink);font-size:17px;font-variant-numeric:tabular-nums}
+.dest{grid-column:1/-1;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font-size:11px;border-radius:999px;padding:2px 8px;background:var(--chip);color:var(--muted);font-weight:600}
+.pill.rt{color:var(--accent)}
+.pill.rt::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:5px;vertical-align:1px;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.empty{color:var(--muted);text-align:center;padding:22px 8px}
+.status{font-size:12px;color:var(--muted);text-align:center;margin:12px 0 0}
+.banner{border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px;background:#fff4e5;color:#7c3e00}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .banner{background:#3a2a12;color:#fcd9a8}}
+:root[data-theme="dark"] .banner{background:#3a2a12;color:#fcd9a8}
+.banner button{background:none;border:0;text-decoration:underline;padding:0;cursor:pointer;color:inherit;font-weight:600}
+#map{height:calc(100vh - 260px);min-height:340px;border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+.maplegend{font-size:12px;color:var(--muted);margin-top:8px}
+.buslist{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.buslist div{font-size:13px;display:flex;gap:8px;align-items:center}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+.busicon{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.stopicon{width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--brand)}
+.stopicon.key{width:20px;height:20px;border-width:5px}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:1000}
+nav .in{display:grid;grid-template-columns:1fr 1fr;max-width:560px;width:100%}
+nav button{border:0;background:none;padding:10px 0 12px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;color:var(--muted);cursor:pointer}
+nav button.on{color:var(--brand);font-weight:700}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) nav button.on{color:var(--accent)}}
+nav svg{width:24px;height:24px}
+dialog{border:0;border-radius:18px;padding:0;max-width:min(520px,calc(100vw - 32px));width:100%;background:var(--card);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlg{padding:18px}
+.dlg h2{margin:0 0 10px;font-size:18px}
+.dlg label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
+.dlg input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
+.dlg p{font-size:13px;color:var(--muted);margin:6px 0}
+.dlg .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.btn{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:600;background:var(--chip)}
+.btn.pri{background:var(--brand);color:#fff}
+.leaflet-container{font:inherit;background:var(--chip)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="badge52">52</span>
+    <h1>Mon bus<span class="sub" id="hdrsub">Maison ⇄ Bureau</span></h1>
+    <button class="iconbtn" id="btnSettings" aria-label="Réglages">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+
+    <section class="view on" id="vTimes">
+      <div class="hero"><img src="peppa.png" alt="Peppa à Paris"><span id="hello">Bonne route ! 🚌</span></div>
+      <div class="dirswitch" role="tablist">
+        <button id="dH2O" class="on">🏠 Maison → Bureau</button>
+        <button id="dO2H">💼 Bureau → Maison</button>
+      </div>
+      <div class="route">
+        <div class="stop"><div class="lbl">Départ</div><div class="nm" id="rFrom"></div></div>
+        <div class="arrow">→</div>
+        <div class="stop" style="text-align:right"><div class="lbl">Arrivée</div><div class="nm" id="rTo"></div></div>
+      </div>
+      <div class="offices" id="offices"></div>
+      <div class="geo" id="geo"></div>
+      <div class="card"><div class="deps" id="deps"><div class="empty">Chargement…</div></div></div>
+      <div class="status" id="status"></div>
+    </section>
+
+    <section class="view" id="vMap">
+      <div id="map"></div>
+      <div class="maplegend" id="maplegend"></div>
+      <div class="buslist" id="buslist"></div>
+    </section>
+  </main>
+
+  <nav><div class="in">
+    <button id="tTimes" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Horaires</button>
+    <button id="tMap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>Plan</button>
+  </div></nav>
+</div>
+
+<dialog id="dlg"><form method="dialog" class="dlg">
+  <h2>Réglages</h2>
+  <p>Les horaires en temps réel viennent d'Île-de-France Mobilités (PRIM). Il faut soit l'adresse du relais (recommandé), soit une clé API.</p>
+  <label for="inProxy">Adresse du relais</label>
+  <input id="inProxy" placeholder="https://bus52.xxxx.workers.dev" autocomplete="off" inputmode="url">
+  <label for="inKey">Clé API PRIM (facultatif)</label>
+  <input id="inKey" placeholder="à coller ici si pas de relais" autocomplete="off">
+  <p>Laisse les deux vides pour voir le mode démo (bus simulés).</p>
+  <div class="row"><button class="btn" value="cancel">Annuler</button><button class="btn pri" value="ok" id="btnSave">Enregistrer</button></div>
+</form></dialog>
+
+<script src="vendor/leaflet.js"></script>
+<script>
+/* =========================================================================
+   Bus 52 — configuration
+   ========================================================================= */
+const CONFIG = {
+  // Relais Cloudflare (voir worker/). Une fois déployé, mets son adresse ici
+  // pour que l'appli marche directement sans rien régler sur le téléphone.
+  proxyUrl: "",
+  lineShortName: "52",
+  home:    { key: "home", label: "La Fontaine - Radio France", short: "Maison",
+             match: ["fontaine", "radio"], approx: [48.8524, 2.2786] },
+  offices: [
+    { key: "vhpv", label: "Victor Hugo - Paul Valéry", short: "V. Hugo – P. Valéry",
+      match: ["victor", "hugo", "valery"], approx: [48.8706, 2.2869] },
+    { key: "cdg",  label: "Charles de Gaulle Étoile - Victor Hugo", short: "Étoile – Victor Hugo",
+      match: ["gaulle", "etoile", "victor"], approx: [48.8735, 2.2918] }
+  ],
+  refreshMs: 30000,
+  geoRadiusM: 900     // en dessous de cette distance on considère qu'elle est « à » l'arrêt
+};
+
+const ODS = "https://data.iledefrance-mobilites.fr/api/explore/v2.1/catalog/datasets/";
+const PRIM = "https://prim.iledefrance-mobilites.fr/marketplace/";
+const COLORS = ["#e11d48", "#2563eb", "#d97706", "#7c3aed", "#0891b2", "#65a30d", "#db2777", "#4f46e5"];
+
+/* ---------- petites aides ---------- */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("bus52." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("bus52." + k, JSON.stringify(v)); } catch {} }
+};
+const norm = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const v = x => Array.isArray(x) ? v(x[0]) : (x && typeof x === "object" && "value" in x) ? x.value : x;
+const pad = n => String(n).padStart(2, "0");
+const hms = d => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+function distM(a, b) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function countdown(ms) {
+  if (ms < 0) ms = 0;
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (h > 0) return `${h}<small>h</small>${pad(m)}<small>min</small>${pad(sec)}<small>s</small>`;
+  return `${m}<small>min</small>${pad(sec)}<small>s</small>`;
+}
+
+/* ---------- état ---------- */
+const S = {
+  dir: "H2O",                                   // H2O = maison→bureau, O2H = bureau→maison
+  office: store.get("office", "vhpv"),
+  proxy: store.get("proxy", "") || CONFIG.proxyUrl,
+  key: store.get("key", ""),
+  demo: false,
+  net: null,                                    // réseau résolu (ligne, arrêts, tracé)
+  deps: [],                                     // prochains départs pour la direction affichée
+  vehicles: [],                                 // positions estimées
+  quayDir: store.get("quayDir", {}),            // quai -> "H2O" / "O2H" appris
+  lastUpdate: null, error: null, geoMsg: "", userPos: null, view: "times"
+};
+S.demo = !S.proxy && !S.key;
+
+/* =========================================================================
+   Réseau : ligne, arrêts, tracé (données ouvertes IDFM, sans clé)
+   ========================================================================= */
+async function ods(ds, params) {
+  const r = await fetch(ODS + ds + "/records?" + new URLSearchParams(params));
+  if (!r.ok) throw new Error("open data " + r.status);
+  return (await r.json()).results || [];
+}
+
+function scoreName(name, tokens) {
+  const n = " " + norm(name) + " ";
+  return tokens.filter(t => n.includes(" " + t)).length / tokens.length;
+}
+
+async function resolveNetwork() {
+  const cached = store.get("net", null);
+  if (cached && cached.v === 3 && Date.now() - cached.at < 7 * 864e5) return cached;
+
+  // 1) la ligne
+  let lines = await ods("referentiel-des-lignes", { where: `shortname_line="${CONFIG.lineShortName}"`, limit: 50 });
+  lines = lines.filter(l => /bus/i.test(l.transportmode || ""));
+  const line = lines.find(l => /ratp/i.test(l.operatorname || "")) || lines[0];
+  if (!line) throw new Error("Ligne 52 introuvable");
+  const lineId = line.id_line;                                  // ex. C01093
+
+  // 2) les arrêts de la ligne
+  const recs = await ods("arrets-lignes", { where: `id="IDFM:${lineId}"`, limit: 100 });
+  const stops = recs.map(r => ({
+    id: r.stop_id, name: r.stop_name,
+    lat: +(r.stop_lat ?? r.pointgeo?.lat), lon: +(r.stop_lon ?? r.pointgeo?.lon),
+    num: (String(r.stop_id).match(/(\d+)\s*$/) || [])[1]
+  })).filter(s => s.num && !isNaN(s.lat));
+
+  const pick = target => {
+    let best = 0;
+    stops.forEach(s => best = Math.max(best, scoreName(s.name, target.match)));
+    if (best < .6) return null;
+    const quays = stops.filter(s => scoreName(s.name, target.match) === best);
+    const lat = quays.reduce((a, q) => a + q.lat, 0) / quays.length;
+    const lon = quays.reduce((a, q) => a + q.lon, 0) / quays.length;
+    return { name: quays[0].name, quays: quays.map(q => q.num), pos: [lat, lon] };
+  };
+  const net = { v: 3, at: Date.now(), lineId, lineName: line.name_line, stops, home: pick(CONFIG.home), offices: {} };
+  CONFIG.offices.forEach(o => net.offices[o.key] = pick(o));
+
+  // 3) le tracé (facultatif)
+  try {
+    const sh = await ods("traces-des-lignes-de-transport-en-commun-idfm", { where: `route_id="IDFM:${lineId}"`, limit: 1 });
+    const g = sh[0] && (sh[0].shape || sh[0].geo_shape);
+    net.shape = g ? (g.geometry || g) : null;
+  } catch { net.shape = null; }
+
+  store.set("net", net);
+  return net;
+}
+
+/* =========================================================================
+   Temps réel (PRIM, via relais ou clé)
+   ========================================================================= */
+async function prim(path, params) {
+  const qs = new URLSearchParams(params).toString();
+  let url, headers = { Accept: "application/json" };
+  if (S.proxy) url = S.proxy.replace(/\/+$/, "") + "/" + path + "?" + qs;
+  else { url = PRIM + path + "?" + qs; headers.apikey = S.key; }
+  const r = await fetch(url, { headers });
+  if (r.status === 401 || r.status === 403) throw new Error("Clé API refusée");
+  if (!r.ok) throw new Error("Temps réel indisponible (" + r.status + ")");
+  return r.json();
+}
+
+const lineRef = () => `STIF:Line::${S.net.lineId}:`;
+const quayRef = n => `STIF:StopPoint:Q:${n}:`;
+const quayNum = ref => (String(ref).match(/Q:(\d+)/) || String(ref).match(/(\d+):?$/) || [])[1];
+const tOf = call => new Date(v(call.ExpectedDepartureTime) || v(call.ExpectedArrivalTime) || v(call.AimedDepartureTime) || v(call.AimedArrivalTime)).getTime();
+
+/* Toutes les courses de la ligne avec leurs prochains arrêts (sert à la carte et au sens) */
+async function fetchJourneys() {
+  const j = await prim("estimated-timetable", { LineRef: lineRef() });
+  const del = j?.Siri?.ServiceDelivery?.EstimatedTimetableDelivery || [];
+  const out = [];
+  del.forEach(d => (d.EstimatedJourneyVersionFrame || []).forEach(f => (f.EstimatedVehicleJourney || []).forEach(ej => {
+    if (v(ej.LineRef) && v(ej.LineRef) !== lineRef()) return;
+    const calls = (ej.EstimatedCalls?.EstimatedCall || []).map(c => ({ q: quayNum(v(c.StopPointRef)), t: tOf(c) })).filter(c => c.q && !isNaN(c.t));
+    if (calls.length) out.push({ id: v(ej.DatedVehicleJourneyRef) || v(ej.FramedVehicleJourneyRef?.DatedVehicleJourneyRef), dest: v(ej.DestinationName), calls });
+  })));
+  return out;
+}
+
+/* Sens d'une course : passe-t-elle par la maison PUIS le bureau ? */
+function journeyDir(j) {
+  const H = S.net.home.quays, O = Object.values(S.net.offices).filter(Boolean).flatMap(o => o.quays);
+  const ih = j.calls.findIndex(c => H.includes(c.q)), io = j.calls.findIndex(c => O.includes(c.q));
+  if (ih >= 0 && io >= 0) return ih < io ? "H2O" : "O2H";
+  return null;
+}
+function learnQuays(journeys) {
+  const H = S.net.home.quays, O = Object.values(S.net.offices).filter(Boolean).flatMap(o => o.quays);
+  journeys.forEach(j => {
+    const d = journeyDir(j); if (!d) return;
+    j.calls.forEach(c => { if (H.includes(c.q) || O.includes(c.q)) S.quayDir[c.q] = d; });
+  });
+  store.set("quayDir", S.quayDir);
+}
+/* Sens deviné par la destination affichée (si la course n'est pas connue) */
+function destDir(dest, fromHome) {
+  const n = norm(dest);
+  const st = S.net.stops.map(s => ({ s, sc: scoreName(s.name, n.split(" ").filter(w => w.length > 3)) })).sort((a, b) => b.sc - a.sc)[0];
+  const office = S.net.offices[S.office] || Object.values(S.net.offices).find(Boolean);
+  if (st && st.sc >= .5 && office) {
+    const p = [st.s.lat, st.s.lon];
+    return distM(p, office.pos) < distM(p, S.net.home.pos) ? "H2O" : "O2H";
+  }
+  if (/opera|madeleine|auber|concorde|etoile|gaulle/.test(n)) return "H2O";
+  if (/cloud|boulogne|auteuil|parc/.test(n)) return "O2H";
+  return fromHome ? "H2O" : "O2H";
+}
+
+async function fetchDepartures(journeys) {
+  const origin = S.dir === "H2O" ? S.net.home : S.net.offices[S.office];
+  const dest = S.dir === "H2O" ? S.net.offices[S.office] : S.net.home;
+  if (!origin) throw new Error("Arrêt de départ introuvable");
+  const byId = new Map((journeys || []).map(j => [j.id, j]));
+  const results = await Promise.all(origin.quays.map(q =>
+    prim("stop-monitoring", { MonitoringRef: quayRef(q), LineRef: lineRef() }).then(j => ({ q, j })).catch(() => ({ q, j: null }))));
+  if (results.every(r => !r.j)) throw new Error("Temps réel indisponible");
+
+  const deps = [];
+  results.forEach(({ q, j }) => {
+    (j?.Siri?.ServiceDelivery?.StopMonitoringDelivery || []).forEach(d => (d.MonitoredStopVisit || []).forEach(vis => {
+      const mvj = vis.MonitoredVehicleJourney || {};
+      if (v(mvj.LineRef) && v(mvj.LineRef) !== lineRef()) return;
+      const call = mvj.MonitoredCall || {};
+      const t = tOf(call); if (isNaN(t)) return;
+      const id = v(mvj.FramedVehicleJourneyRef?.DatedVehicleJourneyRef);
+      const destName = v(call.DestinationDisplay) || v(mvj.DestinationName) || "";
+      const jj = byId.get(id);
+      let dir = jj && journeyDir(jj);
+      if (!dir) dir = S.quayDir[q];
+      if (!dir) dir = destDir(destName, S.dir === "H2O");
+      // arrivée estimée à destination, si on connaît la course
+      let arr = null;
+      if (jj && dest) { const c = jj.calls.find(c => dest.quays.includes(c.q) && c.t > t); if (c) arr = c.t; }
+      deps.push({ t, dest: destName, rt: !!v(call.ExpectedDepartureTime) || !!v(call.ExpectedArrivalTime), atStop: !!call.VehicleAtStop, dir, arr, id });
+    }));
+  });
+  const now = Date.now();
+  const seen = new Set();
+  return deps.filter(d => d.dir === S.dir && d.t > now - 30000)
+    .sort((a, b) => a.t - b.t)
+    .filter(d => { const k = d.id || d.t; if (seen.has(k)) return false; seen.add(k); return true; })
+    .slice(0, 3);
+}
+
+/* =========================================================================
+   Positions estimées des bus (à partir des heures de passage prévues)
+   ========================================================================= */
+function stopByNum(n) { return S.net.stops.find(s => s.num === n); }
+function sequences(journeys) {
+  const best = {};
+  journeys.forEach(j => { const d = journeyDir(j); if (d && (!best[d] || j.calls.length > best[d].length)) best[d] = j.calls.map(c => c.q); });
+  return best;
+}
+function estimateVehicles(journeys) {
+  const now = Date.now(), seq = sequences(journeys), out = [];
+  journeys.forEach(j => {
+    const dir = journeyDir(j) || (j.dest ? destDir(j.dest, true) : null);
+    const calls = j.calls;
+    const k = calls.findIndex(c => c.t >= now - 10000);
+    if (k < 0) return;
+    const next = calls[k], nStop = stopByNum(next.q); if (!nStop) return;
+    let prevQ = k > 0 ? calls[k - 1].q : null, seg = k > 0 ? next.t - calls[k - 1].t : null;
+    if (!prevQ && seq[dir]) { const i = seq[dir].indexOf(next.q); if (i > 0) prevQ = seq[dir][i - 1]; }
+    if (!seg) seg = calls[k + 1] ? Math.max(45000, calls[k + 1].t - next.t) : 90000;
+    const pStop = prevQ && stopByNum(prevQ);
+    // premier arrêt de la course loin dans le futur : bus pas encore parti
+    if (!pStop && next.t - now > 120000) return;
+    let pos = [nStop.lat, nStop.lon];
+    if (pStop) {
+      const f = Math.max(0, Math.min(1, 1 - (next.t - now) / seg));
+      pos = [pStop.lat + (nStop.lat - pStop.lat) * f, pStop.lon + (nStop.lon - pStop.lon) * f];
+    }
+    // heure de passage à la maison / au bureau
+    const H = S.net.home.quays, O = S.net.offices[S.office]?.quays || [];
+    const atHome = calls.find(c => H.includes(c.q)), atOffice = calls.find(c => O.includes(c.q));
+    out.push({ id: j.id, pos, dir, dest: j.dest, nextName: nStop.name, nextT: next.t, atHome: atHome?.t, atOffice: atOffice?.t });
+  });
+  return out;
+}
+
+/* =========================================================================
+   Mode démo : bus simulés (quand ni relais ni clé ne sont réglés)
+   ========================================================================= */
+function demoNetwork() {
+  const h = CONFIG.home.approx, o1 = CONFIG.offices[0].approx, o2 = CONFIG.offices[1].approx;
+  const mid = (a, b, f, dx = 0) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f + dx];
+  const pts = [mid(h, o1, -0.35, -.002), mid(h, o1, -0.15, -.001), h, mid(h, o1, .25, .0015), mid(h, o1, .5, .002), mid(h, o1, .75, .001), o1, o2, mid(o2, [48.8721, 2.3006], 1)];
+  const names = ["Arrêt démo A", "Arrêt démo B", CONFIG.home.label, "Arrêt démo C", "Arrêt démo D", "Arrêt démo E", CONFIG.offices[0].label, CONFIG.offices[1].label, "Arrêt démo F"];
+  const stops = pts.map((p, i) => ({ id: "D" + i, num: String(i), name: names[i], lat: p[0], lon: p[1] }));
+  return { lineId: "DEMO", stops, home: { name: names[2], quays: ["2"], pos: h },
+    offices: { vhpv: { name: names[6], quays: ["6"], pos: o1 }, cdg: { name: names[7], quays: ["7"], pos: o2 } },
+    shape: { type: "LineString", coordinates: pts.map(p => [p[1], p[0]]) } };
+}
+function demoJourneys() {
+  const now = Date.now(), seg = 100000, out = [], n = 9, period = 7 * 60000;
+  for (let dir of ["H2O", "O2H"]) {
+    const order = dir === "H2O" ? [...Array(n).keys()] : [...Array(n).keys()].reverse();
+    const off = dir === "H2O" ? 0 : 190000;
+    for (let i = -3; i < 6; i++) {
+      const start = Math.floor(now / period) * period + i * period + off;
+      const calls = order.map((s, k) => ({ q: String(s), t: start + k * seg })).filter(c => c.t >= now - 10000);
+      if (calls.length) out.push({ id: dir + i + Math.floor(now / period), dest: dir === "H2O" ? "Opéra (démo)" : "Parc de Saint-Cloud (démo)", calls });
+    }
+  }
+  return out;
+}
+
+/* =========================================================================
+   Boucle de rafraîchissement
+   ========================================================================= */
+let journeysCache = [];
+async function refresh() {
+  try {
+    if (S.demo) {
+      S.net = S.net && S.net.lineId === "DEMO" ? S.net : demoNetwork();
+      journeysCache = demoJourneys();
+      const origin = S.dir === "H2O" ? S.net.home : S.net.offices[S.office], dest = S.dir === "H2O" ? S.net.offices[S.office] : S.net.home;
+      S.deps = journeysCache.filter(j => journeyDir(j) === S.dir).map(j => {
+        const c = j.calls.find(c => origin.quays.includes(c.q)); const a = j.calls.find(c => dest.quays.includes(c.q));
+        return c && { t: c.t, dest: j.dest, rt: true, arr: a && a.t > c.t ? a.t : null };
+      }).filter(Boolean).sort((a, b) => a.t - b.t).slice(0, 3);
+    } else {
+      if (!S.net || S.net.lineId === "DEMO") S.net = await resolveNetwork();
+      if (!S.net.home) throw new Error("Arrêt « La Fontaine - Radio France » introuvable sur la ligne");
+      try { journeysCache = await fetchJourneys(); learnQuays(journeysCache); } catch (e) { journeysCache = []; }
+      S.deps = await fetchDepartures(journeysCache);
+    }
+    S.vehicles = estimateVehicles(journeysCache);
+    S.lastUpdate = new Date(); S.error = null;
+  } catch (e) {
+    S.error = e.message || String(e);
+  }
+  render(); renderMap();
+}
+
+/* =========================================================================
+   Affichage
+   ========================================================================= */
+function officeCfg() { return CONFIG.offices.find(o => o.key === S.office) || CONFIG.offices[0]; }
+function render() {
+  const off = officeCfg();
+  $("dH2O").classList.toggle("on", S.dir === "H2O");
+  $("dO2H").classList.toggle("on", S.dir === "O2H");
+  $("rFrom").textContent = S.dir === "H2O" ? CONFIG.home.label : off.label;
+  $("rTo").textContent = S.dir === "H2O" ? off.label : CONFIG.home.label;
+  $("offices").innerHTML = CONFIG.offices.map(o => `<button data-k="${o.key}" class="${o.key === S.office ? "on" : ""}">💼 ${o.short}</button>`).join("");
+  $("geo").textContent = S.geoMsg;
+  { const h = new Date().getHours(); $("hello").textContent = (h < 5 || h >= 18 ? "Bonsoir" : "Bonjour") + " ! Bonne route 🚌"; }
+
+  let b = "";
+  if (S.demo) b = `<div class="banner"><b>Mode démo</b> : les bus sont simulés. Pour les vrais horaires, <button id="openSet">règle le relais ou la clé</button>.</div>`;
+  else if (S.error) b = `<div class="banner">⚠️ ${S.error}. Nouvel essai dans 30 s. <button id="openSet">Réglages</button></div>`;
+  $("banner").innerHTML = b;
+  const os = $("openSet"); if (os) os.onclick = openSettings;
+
+  tick();
+  $("status").textContent = S.lastUpdate ? `Mis à jour à ${hms(S.lastUpdate)} · actualisation toutes les 30 s` : "";
+}
+function tick() {
+  const now = Date.now();
+  if (!S.deps.length) { $("deps").innerHTML = `<div class="empty">${S.error ? "Pas d'horaires pour l'instant." : S.lastUpdate ? "Aucun bus annoncé dans ce sens pour le moment." : "Chargement…"}</div>`; return; }
+  const ranks = ["Prochain bus", "Suivant", "Troisième"];
+  const toName = S.dir === "H2O" ? officeCfg().short : "Maison";
+  $("deps").innerHTML = S.deps.map((d, i) => {
+    const ms = d.t - now, soon = ms < 120000;
+    const cd = d.atStop && ms < 60000 ? "À l'arrêt" : ms <= 0 ? "Départ…" : countdown(ms);
+    return `<div class="dep ${i === 0 ? "first" : ""}">
+      <div><div class="rank">${ranks[i]}</div><div class="cd ${soon ? "soon" : ""}">${cd}</div></div>
+      <div class="meta">passe à<b>${hms(new Date(d.t))}</b>${d.arr ? `arrivée ~${hms(new Date(d.arr)).slice(0, 5)}` : ""}</div>
+      <div class="dest">→ ${d.dest || "?"} <span class="pill ${d.rt ? "rt" : ""}">${d.rt ? "temps réel" : "théorique"}</span></div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------- carte ---------- */
+let map, busLayer, baseLayer;
+function initMap() {
+  if (map || !window.L) return;
+  map = L.map("map", { zoomControl: true, attributionControl: true });
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © CARTO'
+  }).addTo(map);
+  baseLayer = L.layerGroup().addTo(map);
+  busLayer = L.layerGroup().addTo(map);
+  drawBase();
+}
+let baseDrawnFor = null;
+function keyLabel(n) { if (S.net.home?.quays.includes(n)) return "🏠 Maison"; const o = CONFIG.offices.find(o => S.net.offices[o.key]?.quays.includes(n)); return o ? "💼 " + o.short : ""; }
+function keyDir(n) { if (S.net.home?.quays.includes(n)) return "right"; return S.net.offices.cdg?.quays.includes(n) ? "top" : "left"; }
+function drawBase() {
+  if (!map || !S.net || baseDrawnFor === S.net) return;
+  baseDrawnFor = S.net; baseLayer.clearLayers();
+  const brand = getComputedStyle(document.documentElement).getPropertyValue("--brand").trim() || "#0b5d4b";
+  if (S.net.shape) L.geoJSON(S.net.shape, { style: { color: brand, weight: 6, opacity: .75 } }).addTo(baseLayer);
+  const key = new Set([...(S.net.home?.quays || []), ...Object.values(S.net.offices).filter(Boolean).flatMap(o => o.quays)]);
+  const seenNames = new Set(), seenKey = new Set();
+  S.net.stops.forEach(s => {
+    if (seenNames.has(s.name + (key.has(s.num) ? "k" : ""))) return; seenNames.add(s.name + (key.has(s.num) ? "k" : ""));
+    const isKey = key.has(s.num);
+    if (isKey) { const lbl = keyLabel(s.num); if (seenKey.has(lbl)) return; seenKey.add(lbl); }
+    L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "", html: `<div class="stopicon ${isKey ? "key" : ""}"></div>`, iconSize: isKey ? [20, 20] : [14, 14] }), zIndexOffset: isKey ? 500 : 0 })
+      .bindTooltip(isKey ? keyLabel(s.num) : s.name, { permanent: isKey, direction: isKey ? keyDir(s.num) : "top", offset: isKey ? [0, 0] : [0, -8] }).addTo(baseLayer);
+  });
+  const pts = [S.net.home?.pos, ...Object.values(S.net.offices).filter(Boolean).map(o => o.pos)].filter(Boolean);
+  if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(.35));
+}
+function renderMap() {
+  if (S.view !== "map") return;
+  initMap(); if (!map) { $("maplegend").textContent = "Carte indisponible (pas de connexion ?)"; return; }
+  drawBase(); busLayer.clearLayers();
+  const now = Date.now();
+  const list = S.vehicles.slice().sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "H2O" ? -1 : 1));
+  list.forEach((b, i) => {
+    b.color = COLORS[i % COLORS.length];
+    const lbl = b.dir === "H2O" ? "↗" : b.dir === "O2H" ? "↙" : "52";
+    L.marker(b.pos, { icon: L.divIcon({ className: "", html: `<div class="busicon" style="background:${b.color}">${lbl}</div>`, iconSize: [30, 30] }), zIndexOffset: 1000 })
+      .bindPopup(`<b>Bus 52 → ${b.dest || "?"}</b><br>Prochain arrêt : ${b.nextName} (${hms(new Date(b.nextT)).slice(0, 5)})${b.atHome && b.atHome > now ? `<br>Maison à ${hms(new Date(b.atHome)).slice(0, 5)}` : ""}${b.atOffice && b.atOffice > now ? `<br>Bureau à ${hms(new Date(b.atOffice)).slice(0, 5)}` : ""}`)
+      .addTo(busLayer);
+  });
+  if (S.userPos) L.circleMarker(S.userPos, { radius: 7, color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 }).bindTooltip("Toi").addTo(busLayer);
+  const hasJ = journeysCache.length > 0;
+  $("maplegend").innerHTML = hasJ
+    ? `${list.length} bus sur la ligne · ↗ vers ${officeCfg().short} · ↙ vers la maison. Positions <b>estimées</b> d'après les heures de passage en temps réel (IDFM ne publie pas le GPS des bus).`
+    : S.demo ? "" : "Positions des bus indisponibles pour l'instant (données « toutes courses » non reçues).";
+  const near = list.filter(b => (b.atHome && b.atHome > now) || (b.atOffice && b.atOffice > now))
+    .sort((a, b) => Math.min(a.atHome || 9e15, a.atOffice || 9e15) - Math.min(b.atHome || 9e15, b.atOffice || 9e15)).slice(0, 6);
+  $("buslist").innerHTML = near.map(b => `<div><span class="dot" style="background:${b.color}"></span>→ ${b.dest || "?"} · prochain arrêt ${b.nextName}${b.dir === "H2O" && b.atHome > now ? ` · maison dans ${Math.round((b.atHome - now) / 60000)} min` : ""}${b.dir === "O2H" && b.atOffice > now ? ` · bureau dans ${Math.round((b.atOffice - now) / 60000)} min` : ""}</div>`).join("");
+}
+
+/* ---------- géolocalisation : choisit le sens tout seul ---------- */
+function locate() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(p => {
+    const me = [p.coords.latitude, p.coords.longitude]; S.userPos = me;
+    const homePos = S.net?.home?.pos || CONFIG.home.approx;
+    const offs = CONFIG.offices.map(o => ({ o, pos: S.net?.offices?.[o.key]?.pos || o.approx }));
+    const dh = distM(me, homePos);
+    const nearestOff = offs.map(x => ({ ...x, d: distM(me, x.pos) })).sort((a, b) => a.d - b.d)[0];
+    const prevDir = S.dir;
+    if (dh < nearestOff.d && dh < CONFIG.geoRadiusM * 2) { S.dir = "H2O"; S.geoMsg = `📍 Tu es près de la maison (${Math.round(dh)} m) : direction bureau.`; }
+    else if (nearestOff.d < CONFIG.geoRadiusM * 2) { S.dir = "O2H"; S.office = nearestOff.o.key; store.set("office", S.office); S.geoMsg = `📍 Tu es près de ${nearestOff.o.short} (${Math.round(nearestOff.d)} m) : direction maison.`; }
+    else S.geoMsg = "📍 Ni à la maison ni au bureau : choisis le sens.";
+    render();
+    if (S.dir !== prevDir) { S.deps = []; refresh(); }
+  }, () => { S.geoMsg = ""; render(); }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
+}
+
+/* ---------- interactions ---------- */
+function setDir(d) { if (S.dir === d) return; S.dir = d; S.deps = []; S.geoMsg = ""; render(); refresh(); }
+$("dH2O").onclick = () => setDir("H2O");
+$("dO2H").onclick = () => setDir("O2H");
+$("offices").onclick = e => { const k = e.target.closest("button")?.dataset.k; if (!k || k === S.office) return; S.office = k; store.set("office", k); S.deps = []; render(); refresh(); };
+function setView(vw) {
+  S.view = vw;
+  $("vTimes").classList.toggle("on", vw === "times"); $("vMap").classList.toggle("on", vw === "map");
+  $("tTimes").classList.toggle("on", vw === "times"); $("tMap").classList.toggle("on", vw === "map");
+  if (vw === "map") { renderMap(); setTimeout(() => map && map.invalidateSize(), 50); }
+}
+$("tTimes").onclick = () => setView("times");
+$("tMap").onclick = () => setView("map");
+function openSettings() { $("inProxy").value = S.proxy; $("inKey").value = S.key; $("dlg").showModal(); }
+$("btnSettings").onclick = openSettings;
+$("dlg").addEventListener("close", () => {
+  if ($("dlg").returnValue !== "ok") return;
+  S.proxy = $("inProxy").value.trim(); S.key = $("inKey").value.trim();
+  store.set("proxy", S.proxy); store.set("key", S.key);
+  if (!S.proxy && CONFIG.proxyUrl) S.proxy = CONFIG.proxyUrl;
+  S.demo = !S.proxy && !S.key; S.net = null; S.deps = []; baseDrawnFor = null; S.error = null;
+  render(); refresh();
+});
+
+/* ---------- démarrage ---------- */
+render();
+refresh().then(locate);
+setInterval(tick, 1000);
+setInterval(() => { if (!document.hidden) refresh(); }, CONFIG.refreshMs);
+setInterval(() => { if (!document.hidden && S.view === "map") renderMap(); }, 5000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { refresh(); locate(); } });
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>

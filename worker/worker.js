@@ -1,7 +1,7 @@
 // Relais Cloudflare Worker pour l'appli Bus 52.
 // Il ajoute la clé API PRIM (gardée secrète côté Cloudflare) et autorise l'appli à appeler l'API depuis le navigateur.
 // Secret à définir : PRIM_API_KEY   (wrangler secret put PRIM_API_KEY)
-// Variable facultative : ALLOWED_ORIGIN (ex. https://edumontet.github.io) pour n'accepter que l'appli.
+// Variable facultative : ALLOWED_ORIGIN (par défaut https://edumontet.github.io) : seule l'appli peut utiliser le relais.
 
 const PRIM = "https://prim.iledefrance-mobilites.fr/marketplace/";
 const ALLOWED_PATHS = new Set(["stop-monitoring", "estimated-timetable"]);
@@ -9,7 +9,9 @@ const ALLOWED_PATHS = new Set(["stop-monitoring", "estimated-timetable"]);
 export default {
   async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin") || "";
-    const allow = env.ALLOWED_ORIGIN ? (origin === env.ALLOWED_ORIGIN ? origin : "null") : "*";
+    const allowedOrigin = env.ALLOWED_ORIGIN || "https://edumontet.github.io";
+    const allow = origin === allowedOrigin || /^http:\/\/localhost(:\d+)?$/.test(origin) ? origin : allowedOrigin;
+    if (origin && allow !== origin) return new Response("Origine non autorisée", { status: 403 });
     const cors = {
       "Access-Control-Allow-Origin": allow,
       "Access-Control-Allow-Methods": "GET, OPTIONS",

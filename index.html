@@ -158,7 +158,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 /* =========================================================================
    Bus 52 — configuration
    ========================================================================= */
-const VERSION = "v2.1";
+const VERSION = "v2.2";
 const CONFIG = {
   // Relais Cloudflare (voir worker/). Une fois déployé, mets son adresse ici
   // pour que l'appli marche directement sans rien régler sur le téléphone.
@@ -391,6 +391,16 @@ async function fetchDepartures(journeys) {
       deps.push({ t, dest: destName, rt: !!v(call.ExpectedDepartureTime) || !!v(call.ExpectedArrivalTime), atStop: !!call.VehicleAtStop, dir, arr, arrEst, id });
     }));
   });
+  // compléter avec les courses « toutes courses » (estimated-timetable) qui passent à l'arrêt de départ :
+  // stop-monitoring n'annonce souvent que 1 ou 2 bus.
+  const known = new Set(deps.map(d => d.id).filter(Boolean));
+  (journeys || []).forEach(j => {
+    if (known.has(j.id)) return;
+    const c = j.calls.find(c => origin.quays.includes(c.q) && c.t > Date.now() - 30000); if (!c) return;
+    const dir = journeyDir(j) || S.quayDir[c.q] || destDir(j.dest || "", S.dir === "H2O");
+    const a = dest && j.calls.find(x => dest.quays.includes(x.q) && x.t > c.t);
+    deps.push({ t: c.t, dest: j.dest || "", rt: true, atStop: false, dir, arr: a ? a.t : null, arrEst: false, id: j.id, fromET: true });
+  });
   // dernier recours : temps de trajet habituel observé sur les autres bus du même sens
   const trips = (journeys || []).map(j => {
     const a = j.calls.find(c => origin.quays.includes(c.q)); const b = a && dest && j.calls.find(c => dest.quays.includes(c.q) && c.t > a.t);
@@ -498,7 +508,9 @@ function demoJourneys() {
    Boucle de rafraîchissement
    ========================================================================= */
 let journeysCache = [];
+let refreshing = false;
 async function refresh() {
+  if (refreshing) return; refreshing = true; S.lastAttempt = Date.now();
   try {
     if (S.demo) {
       S.net = S.net && S.net.lineId === "DEMO" ? S.net : demoNetwork();
@@ -519,6 +531,7 @@ async function refresh() {
   } catch (e) {
     S.error = /fetch|network|load failed/i.test(e.message || "") ? "Pas de connexion internet" : (e.message || String(e));
   }
+  refreshing = false;
   render(); renderMap(); diag();
 }
 
@@ -563,6 +576,8 @@ function render() {
 }
 function tick() {
   const now = Date.now();
+  // filet de sécurité : si l'appli est restée en veille (iPhone), on relance la mise à jour
+  if (!document.hidden && !refreshing && now - (S.lastAttempt || 0) > CONFIG.refreshMs * 2) refresh();
   if (!S.deps.length) {
     let msg = "Chargement…";
     if (S.error) msg = "Pas d'horaires pour l'instant.";
@@ -680,7 +695,17 @@ setInterval(tick, 1000);
 setInterval(() => { if (!document.hidden) refresh(); }, CONFIG.refreshMs);
 setInterval(() => { if (!document.hidden && S.view === "map") renderMap(); }, 5000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { refresh(); locate(); } });
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  // Mise à jour automatique : dès qu'une nouvelle version est publiée, l'appli la charge toute seule.
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+    setInterval(check, 10 * 60000);
+  }).catch(() => {});
+  let reloaded = !navigator.serviceWorker.controller;   // première installation : pas de rechargement
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (reloaded) return; reloaded = true; location.reload(); });
+}
+window.addEventListener("pageshow", e => { if (e.persisted) refresh(); });
 </script>
 </body>
 </html>

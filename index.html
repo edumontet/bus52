@@ -158,7 +158,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 /* =========================================================================
    Bus 52 — configuration
    ========================================================================= */
-const VERSION = "v2.3";
+const VERSION = "v2.4";
 const CONFIG = {
   // Relais Cloudflare (voir worker/). Une fois déployé, mets son adresse ici
   // pour que l'appli marche directement sans rien régler sur le téléphone.
@@ -356,7 +356,8 @@ function theoTrips(origin, dest, nearHome) {
       const later = tr.c.slice(i + 1).filter(c => destQ.has(c[0]));
       if (!later.length) return;
       const exact = later.find(c => dest.quays.includes(c[0]));
-      const a = exact || later.sort((x, y) => at(x[1]) - at(y[1]))[0];
+      const dh = q => { const st = S.net && stopByNum(q); return st && S.net.home ? distM([st.lat, st.lon], S.net.home.pos) : 9e9; };
+      const a = exact || later.sort((x, y) => dh(x[0]) - dh(y[0]) || at(x[1]) - at(y[1]))[0];
       out.push({ t: at(tr.c[i][1]), arr: at(a[1]), arrStop: exact ? null : (theo.stops?.[a[0]] || null), dest: tr.h, dir: S.dir, rt: false, theo: true, arrEst: false });
     });
   }

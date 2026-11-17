@@ -78,6 +78,7 @@ main{flex:1;padding:14px 16px}
 .pill.rt::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:5px;vertical-align:1px;animation:pulse 1.6s infinite}
 @keyframes pulse{50%{opacity:.25}}
 .empty{color:var(--muted);text-align:center;padding:22px 8px}
+.empty small{display:block;margin-top:8px;font-size:13px;opacity:.85}
 .status{font-size:12px;color:var(--muted);text-align:center;margin:12px 0 0}
 .banner{border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px;background:#fff4e5;color:#7c3e00}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .banner{background:#3a2a12;color:#fcd9a8}}
@@ -157,7 +158,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 /* =========================================================================
    Bus 52 — configuration
    ========================================================================= */
-const VERSION = "v2.0";
+const VERSION = "v2.1";
 const CONFIG = {
   // Relais Cloudflare (voir worker/). Une fois déployé, mets son adresse ici
   // pour que l'appli marche directement sans rien régler sur le téléphone.
@@ -562,7 +563,15 @@ function render() {
 }
 function tick() {
   const now = Date.now();
-  if (!S.deps.length) { $("deps").innerHTML = `<div class="empty">${S.error ? "Pas d'horaires pour l'instant." : S.lastUpdate ? "Aucun bus annoncé dans ce sens pour le moment." : "Chargement…"}</div>`; return; }
+  if (!S.deps.length) {
+    let msg = "Chargement…";
+    if (S.error) msg = "Pas d'horaires pour l'instant.";
+    else if (S.lastUpdate && !S.demo && journeysCache.length === 0)
+      msg = "😴 Le 52 ne circule pas encore (ou plus) : aucun bus n'est annoncé sur toute la ligne.<br><small>Les horaires apparaîtront ici dès que le premier bus sera annoncé par IDFM.</small>";
+    else if (S.lastUpdate)
+      msg = "Aucun bus annoncé à cet arrêt dans ce sens pour le moment.<br><small>Le prochain est sans doute encore loin (IDFM n'annonce que les 2 prochains passages).</small>";
+    $("deps").innerHTML = `<div class="empty">${msg}</div>`; return;
+  }
   const ranks = ["Prochain bus", "Suivant", "Troisième"];
   const toName = S.dir === "H2O" ? officeCfg().short : "à la maison";
   $("deps").innerHTML = S.deps.map((d, i) => {

@@ -158,7 +158,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 /* =========================================================================
    Bus 52 — configuration
    ========================================================================= */
-const VERSION = "v2.2";
+const VERSION = "v2.3";
 const CONFIG = {
   // Relais Cloudflare (voir worker/). Une fois déployé, mets son adresse ici
   // pour que l'appli marche directement sans rien régler sur le téléphone.
@@ -336,6 +336,33 @@ function destDir(dest, fromHome) {
   return fromHome ? "H2O" : "O2H";
 }
 
+/* Horaires théoriques officiels (GTFS IDFM), préparés chaque nuit dans data/horaires.json */
+let theo = null, theoAt = 0;
+async function loadTheo() {
+  if (theo && Date.now() - theoAt < 3600000) return theo;
+  try { const r = await fetch("data/horaires.json", { cache: "no-cache" }); if (r.ok) { theo = await r.json(); theoAt = Date.now(); } } catch {}
+  return theo;
+}
+function theoTrips(origin, dest, nearHome) {
+  if (!theo) return [];
+  const destQ = new Set([...(dest?.quays || []), ...(nearHome ? theo.near || [] : [])]);
+  const out = [], today = new Date(); today.setHours(0, 0, 0, 0);
+  for (const off of [-1, 0, 1]) {
+    const day = new Date(today); day.setDate(day.getDate() + off);
+    const key = `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+    (theo.days?.[key] || []).forEach(tr => {
+      const at = hm => { const [h, m] = hm.split(":").map(Number); const d = new Date(day); d.setHours(h, m, 0, 0); return d.getTime(); };
+      const i = tr.c.findIndex(c => origin.quays.includes(c[0])); if (i < 0) return;
+      const later = tr.c.slice(i + 1).filter(c => destQ.has(c[0]));
+      if (!later.length) return;
+      const exact = later.find(c => dest.quays.includes(c[0]));
+      const a = exact || later.sort((x, y) => at(x[1]) - at(y[1]))[0];
+      out.push({ t: at(tr.c[i][1]), arr: at(a[1]), arrStop: exact ? null : (theo.stops?.[a[0]] || null), dest: tr.h, dir: S.dir, rt: false, theo: true, arrEst: false });
+    });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+
 /* Passages annoncés à un ensemble de quais (stop-monitoring) */
 async function visitsAt(quays) {
   const res = await Promise.all(quays.map(q =>
@@ -365,7 +392,12 @@ async function fetchDepartures(journeys) {
   const byId = new Map((journeys || []).map(j => [j.id, j]));
   const results = await Promise.all(origin.quays.map(q =>
     prim("stop-monitoring", { MonitoringRef: quayRef(q), LineRef: lineRef() }).then(j => ({ q, j })).catch(() => ({ q, j: null }))));
-  if (results.every(r => !r.j)) throw new Error("Temps réel indisponible");
+  if (results.every(r => !r.j)) {
+    await loadTheo();
+    const T0 = theoTrips(origin, dest, S.dir === "O2H").filter(x => x.t > Date.now()).slice(0, 3);
+    if (T0.length) return T0;
+    throw new Error("Temps réel indisponible");
+  }
 
   const deps = [];
   results.forEach(({ q, j }) => {
@@ -421,6 +453,12 @@ async function fetchDepartures(journeys) {
       });
     }
   } catch (e) { S.dbgOut = "ERREUR " + e.message; }
+  await loadTheo();
+  const T = theoTrips(origin, dest, S.dir === "O2H");
+  deps.forEach(d => { if (d.arr) return;
+    const m = T.filter(x => Math.abs(x.t - d.t) < 8 * 60000).sort((a, b) => Math.abs(a.t - d.t) - Math.abs(b.t - d.t))[0];
+    if (m) { d.arr = d.t + (m.arr - m.t); d.arrEst = true; d.arrStop = m.arrStop; }
+  });
   // temps de trajet appris (bus vraiment retrouvés aux deux arrêts), sinon valeur habituelle par défaut
   const tripKey = S.dir + "-" + S.office;
   const learned = store.get("trips", {});
@@ -435,10 +473,13 @@ async function fetchDepartures(journeys) {
   deps.forEach(d => { if (!d.arr && usual) { d.arr = d.t + usual; d.arrEst = true; } });
   const now = Date.now();
   const seen = new Set();
-  return deps.filter(d => d.dir === S.dir && d.t > now - 30000)
+  const live = deps.filter(d => d.dir === S.dir && d.t > now - 30000)
     .sort((a, b) => a.t - b.t)
-    .filter(d => { const k = d.id || d.t; if (seen.has(k)) return false; seen.add(k); return true; })
-    .slice(0, 3);
+    .filter(d => { const k = d.id || d.t; if (seen.has(k)) return false; seen.add(k); return true; });
+  // compléter avec les horaires théoriques après le dernier bus annoncé en temps réel
+  const after = live.length ? live[live.length - 1].t + 3 * 60000 : now;
+  const extra = T.filter(x => x.t > after);
+  return live.concat(extra).slice(0, 3);
 }
 
 /* =========================================================================
@@ -551,6 +592,7 @@ courses (estimated-timetable) : ${J.length}${S.etErr ? " ERREUR " + S.etErr : ""
 avec maison : ${hasH.length} · avec bureau : ${hasO.length} · les deux : ${both.length}
 quais maison : ${H.join(",")} · quais bureau : ${O.join(",")}
 départs : ${S.deps.map(d => (d.id || "?").slice(-22) + (d.arr ? (d.arrEst ? " ≈" : " ✓") + (d.arrStop || "") : " ✗")).join(" | ")}
+horaires prévus : ${theo ? theo.generated + " · " + Object.keys(theo.days || {}).length + " jours" : "absents"}
 arrivée — quais : ${S.dbgVisits || "-"}
 arrivée — ${S.dbgOut || "-"}
 ${ex}`;
@@ -596,7 +638,7 @@ function tick() {
       <div><div class="rank">${ranks[i]}</div><div class="cd ${soon ? "soon" : ""}">${cd}</div></div>
       <div class="meta">passe à<b>${hms(new Date(d.t))}</b></div>
       ${d.arr ? `<div class="arr">🏁 Arrivée ${d.arrStop ? d.arrStop : toName} <b>${d.arrEst ? "≈ " : ""}${hms(new Date(d.arr)).slice(0, 5)}</b> <span>(${Math.round((d.arr - d.t) / 60000)} min de trajet)</span></div>` : ""}
-      <div class="dest">→ ${d.dest || "?"} <span class="pill ${d.rt ? "rt" : ""}">${d.rt ? "temps réel" : "théorique"}</span></div>
+      <div class="dest">→ ${d.dest || "?"} <span class="pill ${d.rt ? "rt" : ""}">${d.rt ? "temps réel" : "horaire prévu"}</span></div>
     </div>`;
   }).join("");
 }

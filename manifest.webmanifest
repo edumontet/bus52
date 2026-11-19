@@ -1,6 +1,6 @@
 {
-  "name": "Bus 52 — Maison ⇄ Bureau",
-  "short_name": "Bus 52",
+  "name": "Mes bus — Maison ⇄ Bureau",
+  "short_name": "Mes bus",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

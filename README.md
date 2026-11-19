@@ -1,6 +1,11 @@
-# Bus 52 — Maison ⇄ Bureau
+# Mes bus (52 et 22) — Maison ⇄ Bureau
 
-Petite web-app (PWA) pour la ligne de bus **52** à Paris :
+Petite web-app (PWA) pour les lignes de bus **52** et **22** à Paris (choix 52 / 22 dans le bandeau vert) :
+
+- **52** : maison *La Fontaine - Radio France* (retour à *Assomption - Radio France*) ⇄ bureau *Victor Hugo - Paul Valéry* ou *Charles de Gaulle Étoile - Victor Hugo*
+- **22** : maison *George Sand - La Fontaine* ⇄ bureau *Charles de Gaulle Étoile - Kléber* (direction Saint-Lazare à l'aller)
+- **Tour Eiffel** : compte à rebours du prochain scintillement (5 min à chaque heure pile, de la tombée de la nuit à 23 h), puis de sa fin.
+
 
 - **Horaires** : les 3 prochains bus avec compte à rebours (min / s) et heure exacte de passage
   - 🏠 Maison → Bureau : départ *La Fontaine - Radio France*
@@ -41,3 +46,8 @@ Settings → Pages → *Deploy from a branch* → `main` / `(root)`.
 ### 4. Sur le téléphone
 Ouvrir https://edumontet.github.io/bus52/ dans Safari → Partager → **Sur l'écran d'accueil**.
 Autoriser la localisation pour le choix automatique du sens.
+
+## Horaires prévus
+Le workflow `.github/workflows/horaires.yml` télécharge chaque nuit les horaires officiels (GTFS IDFM) et écrit
+`data/horaires-52.json` et `data/horaires-22.json`. L'appli s'en sert pour les bus que le temps réel n'annonce pas
+encore (2e/3e bus, premier bus du matin), affichés « horaire prévu ».

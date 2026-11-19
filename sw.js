@@ -1,5 +1,5 @@
 // Service worker : l'appli s'ouvre même hors connexion ; les horaires viennent toujours du réseau.
-const CACHE = "bus52-v15";
+const CACHE = "bus52-v16";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "peppa.png", "vendor/leaflet.js", "vendor/leaflet.css"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
